@@ -177,7 +177,15 @@
 
   $("shuffle").addEventListener("click", shuffle);
   $("add-match").addEventListener("click", async () => {
-    if (!S.suggestion || !sb) return;
+    if (!S.suggestion) return;
+    if (!sb) {
+      // Preview mode: show the new card on this screen only.
+      const [a, b] = S.suggestion;
+      S.matchups.push({ id: "local" + Date.now(), a, b });
+      S.suggestion = null; renderAll();
+      document.querySelectorAll(".vote").forEach(x => x.disabled = true);
+      return;
+    }
     const [a, b] = S.suggestion;
     const { error } = await sb.from("matchups").insert({ a, b });
     if (error) note("The matchup didn't save. Try again.", true);
@@ -248,7 +256,7 @@
     S.loaded = true;
     renderAll();
     document.querySelectorAll(".vote").forEach(b => b.disabled = true);
-    $("add-match").hidden = true; $("organizer").hidden = true;
+    $("organizer").hidden = true;
     $("banner").hidden = false;
     return;
   }
