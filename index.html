@@ -130,6 +130,7 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 
 .state { text-align: center; color: var(--muted); padding: 24px 8px; font-size: 14px; }
 .note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
+.banner { margin-bottom: 16px; padding: 14px 16px; border-radius: 16px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: .04em; color: #fff; background: repeating-linear-gradient(-45deg, #c8202b 0 18px, #e0343f 18px 36px); box-shadow: inset 0 0 0 2px rgba(255,255,255,.18); text-wrap: balance; }
 .organizer { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
 .organizer summary { cursor: pointer; display: inline-block; padding: 4px 8px; }
 .adminform { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
@@ -159,6 +160,8 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
     </div>
     <button class="btn solid" id="open-add" type="button" hidden>+ Add person</button>
   </header>
+
+  <div class="banner" id="banner" hidden role="status">VOTING OPENS SOON!</div>
 
   <section class="panel" id="add-panel" hidden aria-labelledby="add-title">
     <h2 id="add-title">Add a person</h2>

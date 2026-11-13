@@ -249,7 +249,7 @@
     renderAll();
     document.querySelectorAll(".vote").forEach(b => b.disabled = true);
     $("add-match").hidden = true; $("organizer").hidden = true;
-    note("Voting opens soon.");
+    $("banner").hidden = false;
     return;
   }
   load();
