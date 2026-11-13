@@ -1,0 +1,247 @@
+// Caught in PJs: votes, matchups and catches stored in Supabase.
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+
+  const cfg = window.CAUGHT_CONFIG || {};
+  const configured = cfg.supabaseUrl && !cfg.supabaseUrl.includes("YOUR-PROJECT") && cfg.supabaseAnonKey && !cfg.supabaseAnonKey.includes("YOUR-ANON");
+  const sb = configured && window.supabase ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
+
+  // Each browser gets a random voter id, so one device = one vote per matchup.
+  let voter = store.get("caught.voter");
+  if (!voter) { voter = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set("caught.voter", voter); }
+
+  const S = { people: {}, matchups: [], votes: [], results: {}, loaded: false, showAll: false, suggestion: null, adminCode: store.get("caught.admin") };
+
+  // ---------- avatars ----------
+  const palettes = [["#ffb199","#ff5c8a"],["#a18cd1","#5b4bc4"],["#84fab0","#2aa198"],["#fbc2eb","#a6c1ee"],["#fddb92","#f6a04d"],["#8fd3f4","#4b8bf5"]];
+  function initials(name) {
+    let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const [c1, c2] = palettes[h % palettes.length];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/><text x="50" y="62" text-anchor="middle" font-family="Arial" font-weight="700" font-size="36" fill="#fff">${esc((name[0] || "?").toUpperCase())}</text></svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  }
+  const safeUrl = u => typeof u === "string" && (/^photos\/[\w.-]+$/.test(u) || u.startsWith(cfg.supabaseUrl + "/storage/")) ? u : null;
+  const photo = p => (p && safeUrl(p.photo_url)) || initials(p ? p.name : "?");
+  const nameOf = id => S.people[id]?.name || "Someone";
+  const img = (p, cls = "av") => `<img class="${cls}" src="${esc(photo(p))}" alt="${esc(p?.name || "")}" data-fallback="${esc(initials(p?.name || "?"))}">`;
+  document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.dataset.fallback && t.src !== t.dataset.fallback) t.src = t.dataset.fallback; }, true);
+
+  function gauge(p, has) {
+    const r = 38, cx = 46, cy = 46, len = Math.PI * r;
+    const d = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+    return `<svg viewBox="0 0 92 54" aria-hidden="true">
+      <path d="${d}" fill="none" stroke="${has ? "var(--b)" : "var(--card-line)"}" stroke-width="7" stroke-linecap="round"/>
+      ${has ? `<path d="${d}" fill="none" stroke="var(--a)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${len * p / 100} ${len}"/>` : ""}
+    </svg>`;
+  }
+
+  // ---------- data ----------
+  async function load() {
+    if (!sb) return;
+    const [p, m, v, r] = await Promise.all([
+      sb.from("participants").select("id,name,photo_url,created_at").order("created_at"),
+      sb.from("matchups").select("id,a,b,created_at").order("created_at"),
+      sb.from("votes").select("matchup_id,voter,pick"),
+      sb.from("results").select("matchup_id,catcher"),
+    ]);
+    const err = p.error || m.error || v.error || r.error;
+    if (err) { if (!S.loaded) showError("The board couldn't load. Refresh to try again."); return; }
+    S.people = Object.fromEntries(p.data.map(x => [x.id, x]));
+    S.matchups = m.data;
+    S.votes = v.data;
+    S.results = Object.fromEntries(r.data.map(x => [x.matchup_id, x]));
+    S.loaded = true;
+    renderAll();
+  }
+
+  const tally = mid => {
+    let a = 0, b = 0;
+    for (const v of S.votes) if (v.matchup_id === mid) { if (v.pick === "a") a++; else if (v.pick === "b") b++; }
+    return { a, b };
+  };
+  const myPick = mid => S.votes.find(v => v.matchup_id === mid && v.voter === voter)?.pick;
+
+  function standings() {
+    const rows = Object.values(S.people).map(p => ({ p, catches: 0, games: 0 }));
+    const by = Object.fromEntries(rows.map(r => [r.p.id, r]));
+    for (const m of S.matchups) {
+      const res = S.results[m.id]; if (!res) continue;
+      if (by[m.a]) by[m.a].games++; if (by[m.b]) by[m.b].games++;
+      if (by[res.catcher]) by[res.catcher].catches++;
+    }
+    return rows.sort((x, y) => y.catches - x.catches || y.games - x.games || x.p.name.localeCompare(y.p.name));
+  }
+
+  // ---------- render ----------
+  function renderBoard() {
+    const rows = standings();
+    if (!rows.length) { $("board").innerHTML = `<li class="state" style="display:block">No players yet. Add the first person with “+ Add person”.</li>`; $("board-more").hidden = true; return; }
+    const shown = S.showAll ? rows : rows.slice(0, 5);
+    let rank = 0, prev = null;
+    $("board").innerHTML = shown.map((r, i) => {
+      if (prev === null || r.catches !== prev) rank = i + 1; prev = r.catches;
+      const top = r.catches > 0 && rank <= 3 ? ` r${rank}` : "";
+      return `<li class="${top}"><span class="rank">${rank}</span>${img(r.p)}<span class="who">${esc(r.p.name)}<span>${r.games} ${r.games === 1 ? "game" : "games"} played</span></span><span class="catches">${r.catches}<span>${r.catches === 1 ? "catch" : "catches"}</span></span></li>`;
+    }).join("");
+    $("board-more").hidden = rows.length <= 5;
+    $("board-more").textContent = S.showAll ? "Show top 5" : `Show everyone (${rows.length})`;
+  }
+
+  function renderFeed() {
+    const ms = S.matchups.filter(m => S.people[m.a] && S.people[m.b]);
+    if (!ms.length) { $("feed").innerHTML = `<div class="state">No matchups yet. Use “Add matchup” above to put the first pair on the board.</div>`; return; }
+    const admin = !!S.adminCode;
+    $("feed").innerHTML = ms.map(m => {
+      const A = S.people[m.a], B = S.people[m.b];
+      const t = tally(m.id), total = t.a + t.b;
+      const pa = total ? Math.round(t.a / total * 100) : 0, pb = total ? 100 - pa : 0;
+      const pick = myPick(m.id);
+      const res = S.results[m.id]?.catcher;
+      const resSide = res === m.a ? "a" : res === m.b ? "b" : null;
+      const tools = admin ? (resSide
+        ? `<span class="admin"><button class="mini" data-act="clear" data-m="${m.id}" type="button">Undo result</button></span>`
+        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} caught</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} caught</button></span>`) : "";
+      return `<article class="card ${pick ? "voted" : ""}">
+        <div class="versus">
+          <div class="side a">${img(A)}<div class="name">${esc(A.name)}</div><div class="pct">${pa}%</div></div>
+          <div class="gauge">${gauge(pa, total > 0)}<span class="vs">VS</span></div>
+          <div class="side b">${img(B)}<div class="name">${esc(B.name)}</div><div class="pct">${pb}%</div></div>
+        </div>
+        <div class="bar" role="img" aria-label="${esc(A.name)} ${pa} percent, ${esc(B.name)} ${pb} percent"><i class="a" style="width:${pa}%"></i><i class="b" style="width:${pb}%"></i></div>
+        <p class="q">${resSide ? "Final result" : "Who catches the other first?"}</p>
+        <div class="two">
+          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} catches</button>
+          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} catches</button>
+        </div>
+        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} caught ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
+      </article>`;
+    }).join("");
+  }
+
+  const pairKey = (x, y) => [x, y].sort().join("|");
+  function shuffle() {
+    const ids = Object.keys(S.people);
+    const taken = new Set(S.matchups.map(m => pairKey(m.a, m.b)));
+    const options = [];
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!taken.has(pairKey(ids[i], ids[j]))) options.push([ids[i], ids[j]]);
+    const prev = S.suggestion ? pairKey(...S.suggestion) : null;
+    const pool = options.length > 1 ? options.filter(o => pairKey(...o) !== prev) : options;
+    if (!pool.length) { S.suggestion = null; $("suggest").hidden = true; return; }
+    let s = pool[Math.floor(Math.random() * pool.length)];
+    if (Math.random() < .5) s = [s[1], s[0]];
+    S.suggestion = s;
+    $("suggest").hidden = false;
+    const [x, y] = s;
+    $("pair").innerHTML = `<div class="pa">${img(S.people[x])}<b>${esc(S.people[x].name)}</b></div><span class="vs">VS</span><div class="pb">${img(S.people[y])}<b>${esc(S.people[y].name)}</b></div>`;
+  }
+
+  function renderAll() {
+    renderBoard(); renderFeed();
+    const s = S.suggestion;
+    if (!s || !S.people[s[0]] || !S.people[s[1]] || S.matchups.some(m => pairKey(m.a, m.b) === pairKey(...s))) shuffle();
+  }
+
+  function note(text, err) { const n = $("note"); n.textContent = text; n.style.color = err ? "var(--danger)" : ""; }
+  function showError(t) { $("board").innerHTML = `<li class="state" style="display:block">${esc(t)}</li>`; $("feed").innerHTML = ""; }
+
+  // ---------- actions ----------
+  $("feed").addEventListener("click", async e => {
+    const v = e.target.closest(".vote");
+    if (v && sb) {
+      const mid = v.dataset.m, side = v.dataset.side, cur = myPick(mid);
+      S.votes = S.votes.filter(x => !(x.matchup_id === mid && x.voter === voter));
+      if (cur !== side) S.votes.push({ matchup_id: mid, voter, pick: side });
+      renderFeed();
+      const q = cur === side
+        ? sb.from("votes").delete().match({ matchup_id: mid, voter })
+        : sb.from("votes").upsert({ matchup_id: mid, voter, pick: side, updated_at: new Date().toISOString() });
+      const { error } = await q;
+      if (error) { note("Your vote didn't save. Try again.", true); load(); }
+      return;
+    }
+    const a = e.target.closest(".mini");
+    if (a && sb && S.adminCode) {
+      const { error } = a.dataset.act === "catch"
+        ? await sb.rpc("record_result", { p_matchup: a.dataset.m, p_catcher: a.dataset.p, p_code: S.adminCode })
+        : await sb.rpc("clear_result", { p_matchup: a.dataset.m, p_code: S.adminCode });
+      if (error) note("That result didn't save. Check the organizer code.", true);
+      load();
+    }
+  });
+
+  $("shuffle").addEventListener("click", shuffle);
+  $("add-match").addEventListener("click", async () => {
+    if (!S.suggestion || !sb) return;
+    const [a, b] = S.suggestion;
+    const { error } = await sb.from("matchups").insert({ a, b });
+    if (error) note("The matchup didn't save. Try again.", true);
+    S.suggestion = null; load();
+  });
+  $("board-more").addEventListener("click", () => { S.showAll = !S.showAll; renderBoard(); });
+
+  // Add person
+  let cropped = null;
+  const blank = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+  const setMsg = (t, err) => { const m = $("add-msg"); m.textContent = t; m.classList.toggle("err", !!err); };
+  function resetAdd() { $("add-panel").hidden = true; $("add-form").reset(); cropped = null; $("add-preview").src = blank; setMsg("Use a photo where their face is near the middle. It gets cropped to a circle."); }
+  $("open-add").hidden = !sb;
+  $("open-add").addEventListener("click", () => { $("add-panel").hidden = false; $("add-name").focus(); });
+  $("add-cancel").addEventListener("click", resetAdd);
+  $("add-photo").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const bmp = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => createImageBitmap(f));
+      const side = Math.min(bmp.width, bmp.height), size = 400;
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      c.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+      cropped = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+      $("add-preview").src = URL.createObjectURL(cropped);
+      setMsg("Photo ready.");
+    } catch { cropped = null; setMsg("That photo couldn't be read. Try a JPG or PNG.", true); }
+  });
+  $("add-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("add-name").value.trim();
+    if (!name) { setMsg("Enter a name first.", true); $("add-name").focus(); return; }
+    if (Object.values(S.people).some(p => p.name.toLowerCase() === name.toLowerCase())) { setMsg(`${name} is already playing.`, true); return; }
+    $("add-save").disabled = true; setMsg("Saving…");
+    try {
+      let photo_url = null;
+      if (cropped) {
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+        const up = await sb.storage.from("photos").upload(path, cropped, { contentType: "image/jpeg" });
+        if (up.error) throw up.error;
+        photo_url = sb.storage.from("photos").getPublicUrl(path).data.publicUrl;
+      }
+      const { error } = await sb.from("participants").insert({ name, photo_url });
+      if (error) throw error;
+      resetAdd(); note(`Added ${name}.`); load();
+    } catch (err) { setMsg("Couldn't add them: " + (err?.message || "try again."), true); }
+    finally { $("add-save").disabled = false; }
+  });
+
+  // Organizer unlock
+  function showAdminState() { $("admin-msg").textContent = S.adminCode ? "Unlocked. Use the buttons on each card to record who caught who." : "Unlock to record who caught who."; $("admin-go").textContent = S.adminCode ? "Lock" : "Unlock"; $("admin-code").hidden = !!S.adminCode; }
+  $("admin-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    if (S.adminCode) { S.adminCode = null; store.del("caught.admin"); showAdminState(); renderFeed(); return; }
+    const code = $("admin-code").value.trim(); if (!code || !sb) return;
+    const { data, error } = await sb.rpc("check_admin", { p_code: code });
+    if (error || !data) { $("admin-msg").textContent = "That code didn't match."; return; }
+    S.adminCode = code; store.set("caught.admin", code); $("admin-code").value = ""; showAdminState(); renderFeed();
+  });
+  if (S.adminCode) $("organizer").open = true;
+  showAdminState();
+
+  // ---------- boot ----------
+  if (!sb) { showError("This site isn't connected to its database yet. Fill in config.js (see README)."); return; }
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 8000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+})();
