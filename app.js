@@ -240,7 +240,18 @@
   showAdminState();
 
   // ---------- boot ----------
-  if (!sb) { showError("This site isn't connected to its database yet. Fill in config.js (see README)."); return; }
+  if (!sb) {
+    // Preview mode until config.js is filled in: show the starting board, voting off.
+    const seed = [["daniel","Daniel"],["kristine","Kristine"],["theresa","Theresa"],["jg","JG"],["jas","Jas"],["mike","Mike"],["panha","Panha"],["kat","Kat"],["dan","Dan"],["liz","Liz"],["adam","Adam"]];
+    S.people = Object.fromEntries(seed.map(([id, name]) => [id, { id, name, photo_url: `photos/${id}.jpg` }]));
+    S.matchups = [["daniel","kristine"],["theresa","jg"],["jas","mike"],["panha","kat"],["dan","liz"]].map(([a, b], i) => ({ id: "m" + i, a, b }));
+    S.loaded = true;
+    renderAll();
+    document.querySelectorAll(".vote").forEach(b => b.disabled = true);
+    $("add-match").hidden = true; $("organizer").hidden = true;
+    note("Voting opens soon.");
+    return;
+  }
   load();
   setInterval(() => { if (!document.hidden) load(); }, 8000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
