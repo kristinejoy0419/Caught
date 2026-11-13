@@ -45,7 +45,7 @@
   async function load() {
     if (!sb) return;
     const [p, m, v, r] = await Promise.all([
-      sb.from("participants").select("id,name,photo_url,created_at").order("created_at"),
+      sb.from("participants").select("id,name,photo_url,open,created_at").order("created_at"),
       sb.from("matchups").select("id,a,b,created_at").order("created_at"),
       sb.from("votes").select("matchup_id,voter,pick"),
       sb.from("results").select("matchup_id,catcher"),
@@ -79,6 +79,8 @@
   }
 
   // ---------- render ----------
+  const isOpen = p => p.open !== false;
+
   function renderBoard() {
     const rows = standings();
     if (!rows.length) { $("board").innerHTML = `<li class="state" style="display:block">No players yet. Add the first person with “+ Add person”.</li>`; $("board-more").hidden = true; return; }
@@ -87,7 +89,7 @@
     $("board").innerHTML = shown.map((r, i) => {
       if (prev === null || r.catches !== prev) rank = i + 1; prev = r.catches;
       const top = r.catches > 0 && rank <= 3 ? ` r${rank}` : "";
-      return `<li class="${top}"><span class="rank">${rank}</span>${img(r.p)}<span class="who">${esc(r.p.name)}<span>${r.games} ${r.games === 1 ? "game" : "games"} played</span></span><span class="catches">${r.catches}<span>${r.catches === 1 ? "catch" : "catches"}</span></span></li>`;
+      return `<li class="${top}${isOpen(r.p) ? "" : " closed"}"><span class="rank">${rank}</span>${img(r.p)}<span class="who">${esc(r.p.name)}<span>${r.games} ${r.games === 1 ? "game" : "games"} played</span></span><span class="catches">${r.catches}</span><button class="pill ${isOpen(r.p) ? "open" : "closed"}" data-p="${r.p.id}" type="button" aria-label="${esc(r.p.name)}: ${isOpen(r.p) ? "open to matchups, tap to turn off" : "not open to matchups, tap to turn on"}">${isOpen(r.p) ? "Open" : "Not open"}</button></li>`;
     }).join("");
     $("board-more").hidden = rows.length <= 5;
     $("board-more").textContent = S.showAll ? "Show top 5" : `Show everyone (${rows.length})`;
@@ -126,7 +128,9 @@
 
   const pairKey = (x, y) => [x, y].sort().join("|");
   function shuffle() {
-    const ids = Object.keys(S.people);
+    const ids = Object.keys(S.people).filter(id => isOpen(S.people[id]));
+    const hint = document.querySelector("#suggest .hint");
+    if (hint) hint.textContent = `A random pairing from everyone open to matchups (${ids.length} of ${Object.keys(S.people).length}). Shuffle for another.`;
     const taken = new Set(S.matchups.map(m => pairKey(m.a, m.b)));
     const options = [];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!taken.has(pairKey(ids[i], ids[j]))) options.push([ids[i], ids[j]]);
@@ -190,6 +194,18 @@
     const { error } = await sb.from("matchups").insert({ a, b });
     if (error) note("The matchup didn't save. Try again.", true);
     S.suggestion = null; load();
+  });
+  $("board").addEventListener("click", async e => {
+    const b = e.target.closest(".pill"); if (!b) return;
+    const p = S.people[b.dataset.p]; if (!p) return;
+    const next = !isOpen(p);
+    p.open = next;
+    if (S.suggestion && !next && S.suggestion.includes(p.id)) S.suggestion = null;
+    renderBoard(); shuffle();
+    if (!sb) { document.querySelectorAll(".vote").forEach(x => x.disabled = true); return; }
+    const { error } = await sb.rpc("set_open", { p_id: p.id, p_open: next });
+    if (error) { note("That change didn't save. Try again.", true); }
+    load();
   });
   $("board-more").addEventListener("click", () => { S.showAll = !S.showAll; renderBoard(); });
 

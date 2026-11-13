@@ -8,8 +8,10 @@ create table if not exists participants (
   id uuid primary key default gen_random_uuid(),
   name text not null unique check (char_length(name) between 1 and 30),
   photo_url text,
+  open boolean not null default true,
   created_at timestamptz not null default now()
 );
+alter table participants add column if not exists open boolean not null default true;
 
 create table if not exists matchups (
   id uuid primary key default gen_random_uuid(),
@@ -93,6 +95,13 @@ create or replace function check_admin(p_code text)
 returns boolean language sql security definer set search_path = public as $$
   select exists (select 1 from admin_settings where id = 1 and code = p_code);
 $$;
+
+-- Anyone can switch a player between open and not open for new matchups.
+create or replace function set_open(p_id uuid, p_open boolean)
+returns void language sql security definer set search_path = public as $$
+  update participants set open = p_open where id = p_id;
+$$;
+grant execute on function set_open(uuid, boolean) to anon;
 
 grant execute on function record_result(uuid, uuid, text) to anon;
 grant execute on function clear_result(uuid, text) to anon;

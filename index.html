@@ -74,7 +74,15 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 
 /* leaderboard */
 .board ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.board li { display: grid; grid-template-columns: 22px 36px 1fr auto; align-items: center; gap: 10px; }
+.board li { display: grid; grid-template-columns: 22px 36px 1fr auto 84px; align-items: center; gap: 10px; }
+.colhead { display: grid; grid-template-columns: 22px 36px 1fr auto 84px; gap: 10px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.colhead span:nth-child(4) { text-align: right; } .colhead span:nth-child(5) { text-align: center; }
+.board li.closed .av, .board li.closed .who, .board li.closed .catches, .board li.closed .rank { opacity: .45; }
+.pill { width: 84px; border-radius: 999px; padding: 6px 0; font: 600 12px var(--body); cursor: pointer; border: 1px solid transparent; text-align: center; }
+.pill.open { background: var(--b-soft); color: var(--b); border-color: color-mix(in srgb, var(--b) 40%, transparent); }
+.pill.closed { background: var(--card-2); color: var(--muted); border-color: var(--card-line); }
+.pill:disabled { opacity: .6; cursor: default; }
+.pill:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .rank { font-family: var(--display); font-weight: 800; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
 .board li.r1 .rank { color: var(--gold); } .board li.r2 .rank { color: var(--silver); } .board li.r3 .rank { color: var(--bronze); }
 .av { border-radius: 50%; object-fit: cover; background: var(--card-2); display: block; }
@@ -180,7 +188,8 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   </section>
 
   <section class="panel board" aria-labelledby="board-title">
-    <h2 id="board-title">Most catches <small>Season 1</small></h2>
+    <h2 id="board-title">Season 1 catches</h2>
+    <div class="colhead" aria-hidden="true"><span>#</span><span></span><span>Player</span><span>Catches</span><span>Matchups</span></div>
     <ol id="board"><li class="state" style="display:block">Loading players…</li></ol>
     <button class="more" id="board-more" type="button" hidden>Show everyone</button>
   </section>
@@ -210,7 +219,7 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="config.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
