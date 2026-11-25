@@ -1,6 +1,6 @@
 # Caught in PJs
 
-A one-page site where friends vote on which partner in each couple catches the other. It also has a catches leaderboard, random suggested matchups, and an "Add person" button that crops a photo into a circle.
+A one-page site where friends vote on which partner in each couple catches the other. It also has a catches leaderboard, random girl vs guy suggested matchups, a "Proposed challenge" picker at the bottom for any two open players, and an "Add person" button that crops a photo into a circle.
 
 Anyone with the link can vote, add people and add matchups. They don't need to sign in. Each browser gets one vote per matchup. Only someone with the organizer code can record who caught who.
 
@@ -21,7 +21,7 @@ After any change to `Code.gs`: **Deploy > Manage deployments**, click the pencil
 ## Running the event
 
 - The organizer code is on the Sheet's **Settings** tab. Tap **Organizer** at the bottom of the page and enter it. Each card then shows "___ caught" buttons. Tap one to record the result, which updates the leaderboard. Tap "Undo result" to fix a mistake. You can also type the winner's name in the **Caught by** column on the Matchups tab.
-- The **Girl or guy** column on the Players tab sets each person's vote button: girls get "escapes", guys get "catches". The "Add person" form asks for it; fill it in by hand for anyone added before that.
+- The **Girl or guy** column on the Players tab sets each person's vote button: girls get "escapes", guys get "catches". The "Add person" form asks for it; the starting five girls (Kristine, Theresa, Jas, Kat, Liz) are already set even if their cell is blank.
 - To take someone off the board or remove a matchup, delete its row in the Sheet.
 - Votes refresh every few seconds for everyone.
 

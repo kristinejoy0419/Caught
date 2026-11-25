@@ -59,8 +59,10 @@
   const safeUrl = u => typeof u === "string" && (/^photos\/[\w.-]+$/.test(u) || /^https:\/\//.test(u)) ? u : null;
   const photo = p => (p && safeUrl(p.photo_url)) || initials(p ? p.name : "?");
   const nameOf = id => S.people[id]?.name || "Someone";
-  // The girls run away, so a girl's side reads "escapes" where a guy's reads "catches".
+  // Against a guy the girl runs away, so her side reads "escapes" where his reads "catches".
   const girl = id => S.people[id]?.girl === true;
+  // In a girl vs girl or guy vs guy challenge, both sides read "catches".
+  const runs = (id, other) => girl(id) && !girl(other);
   const img = (p, cls = "av") => `<img class="${cls}" src="${esc(photo(p))}" alt="${esc(p?.name || "")}" data-fallback="${esc(initials(p?.name || "?"))}">`;
   document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.dataset.fallback && t.src !== t.dataset.fallback) t.src = t.dataset.fallback; }, true);
 
@@ -133,7 +135,7 @@
       const resSide = res === m.a ? "a" : res === m.b ? "b" : null;
       const tools = admin ? (resSide
         ? `<span class="admin"><button class="mini" data-act="clear" data-m="${m.id}" type="button">Undo result</button></span>`
-        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} ${girl(m.a) ? "escaped" : "caught"}</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} ${girl(m.b) ? "escaped" : "caught"}</button></span>`) : "";
+        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} ${runs(m.a, m.b) ? "escaped" : "caught"}</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} ${runs(m.b, m.a) ? "escaped" : "caught"}</button></span>`) : "";
       return `<article class="card ${pick ? "voted" : ""}">
         <div class="versus">
           <div class="side a">${img(A)}<div class="name">${esc(A.name)}</div><div class="pct">${pa}%</div></div>
@@ -143,10 +145,10 @@
         <div class="bar" role="img" aria-label="${esc(A.name)} ${pa} percent, ${esc(B.name)} ${pb} percent"><i class="a" style="width:${pa}%"></i><i class="b" style="width:${pb}%"></i></div>
         <p class="q">${resSide ? "Final result" : "Who catches the other first?"}</p>
         <div class="two">
-          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} ${girl(m.a) ? "escapes" : "catches"}</button>
-          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} ${girl(m.b) ? "escapes" : "catches"}</button>
+          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} ${runs(m.a, m.b) ? "escapes" : "catches"}</button>
+          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} ${runs(m.b, m.a) ? "escapes" : "catches"}</button>
         </div>
-        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} ${girl(res) ? "escaped" : "caught"} ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
+        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} ${runs(res, resSide === "a" ? m.b : m.a) ? "escaped" : "caught"} ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
       </article>`;
     }).join("");
   }
@@ -155,10 +157,10 @@
   function shuffle() {
     const ids = Object.keys(S.people).filter(id => isOpen(S.people[id]));
     const hint = document.querySelector("#suggest .hint");
-    if (hint) hint.textContent = `A random pairing from everyone open to matchups (${ids.length} of ${Object.keys(S.people).length}). Shuffle for another.`;
+    if (hint) hint.textContent = `A random girl vs guy pairing from everyone open to matchups (${ids.length} of ${Object.keys(S.people).length}). Shuffle for another.`;
     const taken = new Set(S.matchups.map(m => pairKey(m.a, m.b)));
     const options = [];
-    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!taken.has(pairKey(ids[i], ids[j]))) options.push([ids[i], ids[j]]);
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (girl(ids[i]) !== girl(ids[j]) && !taken.has(pairKey(ids[i], ids[j]))) options.push([ids[i], ids[j]]);
     const prev = S.suggestion ? pairKey(...S.suggestion) : null;
     const pool = options.length > 1 ? options.filter(o => pairKey(...o) !== prev) : options;
     if (!pool.length) { S.suggestion = null; $("suggest").hidden = true; return; }
@@ -171,7 +173,7 @@
   }
 
   function renderAll() {
-    renderBoard(); renderFeed();
+    renderBoard(); renderFeed(); renderChallenge();
     const s = S.suggestion;
     if (!s || !S.people[s[0]] || !S.people[s[1]] || S.matchups.some(m => pairKey(m.a, m.b) === pairKey(...s))) shuffle();
   }
@@ -201,20 +203,37 @@
   });
 
   $("shuffle").addEventListener("click", shuffle);
-  $("add-match").addEventListener("click", async () => {
-    if (!S.suggestion) return;
+  async function addMatchup(a, b) {
+    if (S.suggestion && pairKey(...S.suggestion) === pairKey(a, b)) S.suggestion = null;
     if (!sb) {
       // Preview mode: show the new card on this screen only.
-      const [a, b] = S.suggestion;
       S.matchups.push({ id: "local" + Date.now(), a, b });
-      S.suggestion = null; renderAll();
+      renderAll();
       document.querySelectorAll(".vote").forEach(x => x.disabled = true);
       return;
     }
-    const [a, b] = S.suggestion;
-    S.suggestion = null;
     const { error } = await post({ action: "matchup", a, b });
     if (error) { note(error.message && error.message !== "Not saved" ? error.message + "." : "The matchup didn't save. Try again.", true); load(); }
+  }
+  $("add-match").addEventListener("click", () => { if (S.suggestion) addMatchup(...S.suggestion); });
+
+  // Proposed challenge: anyone can pair two people who are open to matchups, girl vs girl and guy vs guy included.
+  function renderChallenge() {
+    const people = Object.values(S.people).filter(isOpen).sort((x, y) => x.name.localeCompare(y.name));
+    $("challenge").hidden = people.length < 2;
+    for (const id of ["ch-a", "ch-b"]) {
+      const sel = $(id), cur = sel.value;
+      sel.innerHTML = `<option value="">${id === "ch-a" ? "Challenger" : "Opponent"}</option>` + people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+      if (S.people[cur]) sel.value = cur;
+    }
+  }
+  $("ch-go").addEventListener("click", () => {
+    const a = $("ch-a").value, b = $("ch-b").value, msg = $("ch-msg");
+    if (!a || !b) { msg.textContent = "Pick two people."; return; }
+    if (a === b) { msg.textContent = "Pick two different people."; return; }
+    if (S.matchups.some(m => pairKey(m.a, m.b) === pairKey(a, b))) { msg.textContent = "That matchup is already up."; return; }
+    msg.textContent = ""; $("ch-a").value = ""; $("ch-b").value = "";
+    addMatchup(a, b);
   });
   $("board").addEventListener("click", async e => {
     const b = e.target.closest(".pill"); if (!b) return;
@@ -222,7 +241,7 @@
     const next = !isOpen(p);
     p.open = next;
     if (S.suggestion && !next && S.suggestion.includes(p.id)) S.suggestion = null;
-    renderBoard(); shuffle();
+    renderBoard(); renderChallenge(); shuffle();
     if (!sb) { document.querySelectorAll(".vote").forEach(x => x.disabled = true); return; }
     inflight++;
     const { error } = await post({ action: "open", id: p.id, open: next });
@@ -238,6 +257,13 @@
   function resetAdd() { $("add-panel").hidden = true; $("add-form").reset(); cropped = null; $("add-preview").src = blank; setMsg("Use a photo where their face is near the middle. It gets cropped to a circle."); }
   $("open-add").hidden = !sb;
   $("open-add").addEventListener("click", () => { $("add-panel").hidden = false; $("add-name").focus(); });
+  // Names Kristine expects to join, so Girl / Guy is picked for them as they type. It can still be changed.
+  const KNOWN = { weini: "girl", jordan: "guy", maverick: "guy", ari: "girl", cheryll: "girl", bryce: "guy", cm: "girl",
+    "chris marie": "girl", marz: "guy", marcel: "guy", keke: "girl", keeks: "girl", jaime: "girl", teri: "girl" };
+  $("add-name").addEventListener("input", e => {
+    const g = KNOWN[e.target.value.trim().toLowerCase().replace(/\s+/g, " ")];
+    if (g) document.querySelector(`input[name="add-girl"][value="${g}"]`).checked = true;
+  });
   $("add-cancel").addEventListener("click", resetAdd);
   $("add-photo").addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
@@ -292,7 +318,7 @@
   if (!sb) {
     // Preview mode until config.js is filled in: show the starting board, voting off.
     const seed = [["daniel","Daniel"],["kristine","Kristine"],["theresa","Theresa"],["jg","JG"],["jas","Jas"],["mike","Mike"],["panha","Panha"],["kat","Kat"],["dan","Dan"],["liz","Liz"],["adam","Adam"]];
-    S.people = Object.fromEntries(seed.map(([id, name]) => [id, { id, name, photo_url: `photos/${id}.jpg` }]));
+    S.people = Object.fromEntries(seed.map(([id, name]) => [id, { id, name, photo_url: `photos/${id}.jpg`, girl: ["kristine","theresa","jas","kat","liz"].includes(id) }]));
     S.matchups = [["daniel","kristine"],["theresa","jg"],["jas","mike"],["panha","kat"],["dan","liz"]].map(([a, b], i) => ({ id: "m" + i, a, b }));
     S.loaded = true;
     renderAll();

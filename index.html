@@ -109,6 +109,8 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .vs { font-family: var(--display); font-weight: 800; color: var(--muted); letter-spacing: .06em; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .two .btn { border-radius: 12px; padding: 12px; }
+.two select { width: 100%; min-width: 0; background: var(--card-2); border: 1px solid var(--card-line); color: var(--fg); border-radius: 12px; padding: 11px 10px; font: 500 15px var(--body); }
+#challenge .two:has(#ch-go) { grid-template-columns: 1fr; }
 
 /* cards */
 .feed { display: grid; gap: 14px; }
@@ -208,7 +210,7 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 
   <section class="panel suggest" id="suggest" aria-labelledby="suggest-title" hidden>
     <h2 id="suggest-title">Suggested matchup</h2>
-    <p class="hint">A random pairing from everyone playing. Shuffle for another.</p>
+    <p class="hint">A random girl vs guy pairing. Shuffle for another.</p>
     <div class="pair" id="pair"></div>
     <div class="two">
       <button class="btn" type="button" id="shuffle">Shuffle</button>
@@ -216,8 +218,19 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
     </div>
   </section>
 
+
   <main class="feed" id="feed"><div class="state">Loading matchups…</div></main>
   <p class="note" id="note"></p>
+  <section class="panel suggest" id="challenge" aria-labelledby="challenge-title" hidden>
+    <h2 id="challenge-title">Proposed challenge</h2>
+    <p class="hint">Challenge anyone who is open to matchups. Girl vs girl and guy vs guy races are fine too.</p>
+    <div class="two">
+      <select id="ch-a" aria-label="Challenger"></select>
+      <select id="ch-b" aria-label="Opponent"></select>
+    </div>
+    <div class="two"><button class="btn solid" type="button" id="ch-go">Add challenge</button></div>
+    <p class="hint" id="ch-msg" role="status"></p>
+  </section>
   <details class="organizer" id="organizer">
     <summary>Organizer</summary>
     <form id="admin-form" class="adminform">
@@ -229,6 +242,6 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 </div>
 
 <script src="config.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
