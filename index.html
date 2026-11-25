@@ -218,9 +218,12 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
     </div>
   </section>
 
+
+  <main class="feed" id="feed"><div class="state">Loading matchups…</div></main>
+  <p class="note" id="note"></p>
   <section class="panel suggest" id="challenge" aria-labelledby="challenge-title" hidden>
-    <h2 id="challenge-title">Challenge someone</h2>
-    <p class="hint">Pick any two people, even girl vs girl or guy vs guy.</p>
+    <h2 id="challenge-title">Proposed challenge</h2>
+    <p class="hint">Challenge anyone who is open to matchups. Girl vs girl and guy vs guy races are fine too.</p>
     <div class="two">
       <select id="ch-a" aria-label="Challenger"></select>
       <select id="ch-b" aria-label="Opponent"></select>
@@ -228,9 +231,6 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
     <div class="two"><button class="btn solid" type="button" id="ch-go">Add challenge</button></div>
     <p class="hint" id="ch-msg" role="status"></p>
   </section>
-
-  <main class="feed" id="feed"><div class="state">Loading matchups…</div></main>
-  <p class="note" id="note"></p>
   <details class="organizer" id="organizer">
     <summary>Organizer</summary>
     <form id="admin-form" class="adminform">
@@ -242,6 +242,6 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 </div>
 
 <script src="config.js?v=12"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

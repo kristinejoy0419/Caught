@@ -59,8 +59,10 @@
   const safeUrl = u => typeof u === "string" && (/^photos\/[\w.-]+$/.test(u) || /^https:\/\//.test(u)) ? u : null;
   const photo = p => (p && safeUrl(p.photo_url)) || initials(p ? p.name : "?");
   const nameOf = id => S.people[id]?.name || "Someone";
-  // The girls run away, so a girl's side reads "escapes" where a guy's reads "catches".
+  // Against a guy the girl runs away, so her side reads "escapes" where his reads "catches".
   const girl = id => S.people[id]?.girl === true;
+  // In a girl vs girl or guy vs guy challenge, both sides read "catches".
+  const runs = (id, other) => girl(id) && !girl(other);
   const img = (p, cls = "av") => `<img class="${cls}" src="${esc(photo(p))}" alt="${esc(p?.name || "")}" data-fallback="${esc(initials(p?.name || "?"))}">`;
   document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.dataset.fallback && t.src !== t.dataset.fallback) t.src = t.dataset.fallback; }, true);
 
@@ -133,7 +135,7 @@
       const resSide = res === m.a ? "a" : res === m.b ? "b" : null;
       const tools = admin ? (resSide
         ? `<span class="admin"><button class="mini" data-act="clear" data-m="${m.id}" type="button">Undo result</button></span>`
-        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} ${girl(m.a) ? "escaped" : "caught"}</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} ${girl(m.b) ? "escaped" : "caught"}</button></span>`) : "";
+        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} ${runs(m.a, m.b) ? "escaped" : "caught"}</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} ${runs(m.b, m.a) ? "escaped" : "caught"}</button></span>`) : "";
       return `<article class="card ${pick ? "voted" : ""}">
         <div class="versus">
           <div class="side a">${img(A)}<div class="name">${esc(A.name)}</div><div class="pct">${pa}%</div></div>
@@ -143,10 +145,10 @@
         <div class="bar" role="img" aria-label="${esc(A.name)} ${pa} percent, ${esc(B.name)} ${pb} percent"><i class="a" style="width:${pa}%"></i><i class="b" style="width:${pb}%"></i></div>
         <p class="q">${resSide ? "Final result" : "Who catches the other first?"}</p>
         <div class="two">
-          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} ${girl(m.a) ? "escapes" : "catches"}</button>
-          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} ${girl(m.b) ? "escapes" : "catches"}</button>
+          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} ${runs(m.a, m.b) ? "escapes" : "catches"}</button>
+          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} ${runs(m.b, m.a) ? "escapes" : "catches"}</button>
         </div>
-        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} ${girl(res) ? "escaped" : "caught"} ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
+        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} ${runs(res, resSide === "a" ? m.b : m.a) ? "escaped" : "caught"} ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
       </article>`;
     }).join("");
   }
@@ -215,9 +217,9 @@
   }
   $("add-match").addEventListener("click", () => { if (S.suggestion) addMatchup(...S.suggestion); });
 
-  // Challenge: anyone can pick any two people, girl vs girl and guy vs guy included.
+  // Proposed challenge: anyone can pair two people who are open to matchups, girl vs girl and guy vs guy included.
   function renderChallenge() {
-    const people = Object.values(S.people).sort((x, y) => x.name.localeCompare(y.name));
+    const people = Object.values(S.people).filter(isOpen).sort((x, y) => x.name.localeCompare(y.name));
     $("challenge").hidden = people.length < 2;
     for (const id of ["ch-a", "ch-b"]) {
       const sel = $(id), cur = sel.value;
@@ -239,7 +241,7 @@
     const next = !isOpen(p);
     p.open = next;
     if (S.suggestion && !next && S.suggestion.includes(p.id)) S.suggestion = null;
-    renderBoard(); shuffle();
+    renderBoard(); renderChallenge(); shuffle();
     if (!sb) { document.querySelectorAll(".vote").forEach(x => x.disabled = true); return; }
     inflight++;
     const { error } = await post({ action: "open", id: p.id, open: next });
