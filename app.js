@@ -32,7 +32,7 @@
   }
   // Turn the Sheet's answer into the shapes the page renders.
   function apply(d) {
-    S.people = Object.fromEntries(d.players.map(p => [p.id, { id: p.id, name: p.name, photo_url: p.photo, open: p.open !== false }]));
+    S.people = Object.fromEntries(d.players.map(p => [p.id, { id: p.id, name: p.name, photo_url: p.photo, open: p.open !== false, girl: p.girl === true }]));
     S.matchups = d.matchups.map(m => ({ id: m.id, a: m.a, b: m.b }));
     const mine = d.mine || {};
     S.votes = [];
@@ -59,6 +59,8 @@
   const safeUrl = u => typeof u === "string" && (/^photos\/[\w.-]+$/.test(u) || /^https:\/\//.test(u)) ? u : null;
   const photo = p => (p && safeUrl(p.photo_url)) || initials(p ? p.name : "?");
   const nameOf = id => S.people[id]?.name || "Someone";
+  // The girls run away, so a girl's side reads "escapes" where a guy's reads "catches".
+  const girl = id => S.people[id]?.girl === true;
   const img = (p, cls = "av") => `<img class="${cls}" src="${esc(photo(p))}" alt="${esc(p?.name || "")}" data-fallback="${esc(initials(p?.name || "?"))}">`;
   document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.dataset.fallback && t.src !== t.dataset.fallback) t.src = t.dataset.fallback; }, true);
 
@@ -131,7 +133,7 @@
       const resSide = res === m.a ? "a" : res === m.b ? "b" : null;
       const tools = admin ? (resSide
         ? `<span class="admin"><button class="mini" data-act="clear" data-m="${m.id}" type="button">Undo result</button></span>`
-        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} caught</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} caught</button></span>`) : "";
+        : `<span class="admin"><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.a}" type="button">${esc(A.name)} ${girl(m.a) ? "escaped" : "caught"}</button><button class="mini" data-act="catch" data-m="${m.id}" data-p="${m.b}" type="button">${esc(B.name)} ${girl(m.b) ? "escaped" : "caught"}</button></span>`) : "";
       return `<article class="card ${pick ? "voted" : ""}">
         <div class="versus">
           <div class="side a">${img(A)}<div class="name">${esc(A.name)}</div><div class="pct">${pa}%</div></div>
@@ -141,10 +143,10 @@
         <div class="bar" role="img" aria-label="${esc(A.name)} ${pa} percent, ${esc(B.name)} ${pb} percent"><i class="a" style="width:${pa}%"></i><i class="b" style="width:${pb}%"></i></div>
         <p class="q">${resSide ? "Final result" : "Who catches the other first?"}</p>
         <div class="two">
-          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} catches</button>
-          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} catches</button>
+          <button class="vote a ${pick === "a" ? "picked" : ""}" data-m="${m.id}" data-side="a" type="button">${pick === "a" ? "✓ " : ""}${esc(A.name)} ${girl(m.a) ? "escapes" : "catches"}</button>
+          <button class="vote b ${pick === "b" ? "picked" : ""}" data-m="${m.id}" data-side="b" type="button">${pick === "b" ? "✓ " : ""}${esc(B.name)} ${girl(m.b) ? "escapes" : "catches"}</button>
         </div>
-        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} caught ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
+        <div class="foot"><span>${total} ${total === 1 ? "vote" : "votes"}</span>${resSide ? `<span class="result ${resSide}">${esc(nameOf(res))} ${girl(res) ? "escaped" : "caught"} ${esc(nameOf(resSide === "a" ? m.b : m.a))}</span>` : ""}${tools}</div>
       </article>`;
     }).join("");
   }
@@ -253,6 +255,8 @@
     e.preventDefault();
     const name = $("add-name").value.trim();
     if (!name) { setMsg("Enter a name first.", true); $("add-name").focus(); return; }
+    const g = document.querySelector('input[name="add-girl"]:checked');
+    if (!g) { setMsg("Pick girl or guy.", true); return; }
     if (Object.values(S.people).some(p => p.name.toLowerCase() === name.toLowerCase())) { setMsg(`${name} is already playing.`, true); return; }
     $("add-save").disabled = true; setMsg("Saving…");
     try {
@@ -263,7 +267,7 @@
         setMsg("Uploading the photo…");
       }
       inflight++;
-      const { error } = await post({ action: "join", name, photo });
+      const { error } = await post({ action: "join", name, photo, girl: g.value === "girl" });
       inflight--;
       if (error) throw error;
       resetAdd(); note(`Added ${name}.`);
