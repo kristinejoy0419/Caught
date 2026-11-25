@@ -155,10 +155,10 @@
   function shuffle() {
     const ids = Object.keys(S.people).filter(id => isOpen(S.people[id]));
     const hint = document.querySelector("#suggest .hint");
-    if (hint) hint.textContent = `A random pairing from everyone open to matchups (${ids.length} of ${Object.keys(S.people).length}). Shuffle for another.`;
+    if (hint) hint.textContent = `A random girl vs guy pairing from everyone open to matchups (${ids.length} of ${Object.keys(S.people).length}). Shuffle for another.`;
     const taken = new Set(S.matchups.map(m => pairKey(m.a, m.b)));
     const options = [];
-    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (!taken.has(pairKey(ids[i], ids[j]))) options.push([ids[i], ids[j]]);
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (girl(ids[i]) !== girl(ids[j]) && !taken.has(pairKey(ids[i], ids[j]))) options.push([ids[i], ids[j]]);
     const prev = S.suggestion ? pairKey(...S.suggestion) : null;
     const pool = options.length > 1 ? options.filter(o => pairKey(...o) !== prev) : options;
     if (!pool.length) { S.suggestion = null; $("suggest").hidden = true; return; }
@@ -171,7 +171,7 @@
   }
 
   function renderAll() {
-    renderBoard(); renderFeed();
+    renderBoard(); renderFeed(); renderChallenge();
     const s = S.suggestion;
     if (!s || !S.people[s[0]] || !S.people[s[1]] || S.matchups.some(m => pairKey(m.a, m.b) === pairKey(...s))) shuffle();
   }
@@ -201,20 +201,37 @@
   });
 
   $("shuffle").addEventListener("click", shuffle);
-  $("add-match").addEventListener("click", async () => {
-    if (!S.suggestion) return;
+  async function addMatchup(a, b) {
+    if (S.suggestion && pairKey(...S.suggestion) === pairKey(a, b)) S.suggestion = null;
     if (!sb) {
       // Preview mode: show the new card on this screen only.
-      const [a, b] = S.suggestion;
       S.matchups.push({ id: "local" + Date.now(), a, b });
-      S.suggestion = null; renderAll();
+      renderAll();
       document.querySelectorAll(".vote").forEach(x => x.disabled = true);
       return;
     }
-    const [a, b] = S.suggestion;
-    S.suggestion = null;
     const { error } = await post({ action: "matchup", a, b });
     if (error) { note(error.message && error.message !== "Not saved" ? error.message + "." : "The matchup didn't save. Try again.", true); load(); }
+  }
+  $("add-match").addEventListener("click", () => { if (S.suggestion) addMatchup(...S.suggestion); });
+
+  // Challenge: anyone can pick any two people, girl vs girl and guy vs guy included.
+  function renderChallenge() {
+    const people = Object.values(S.people).sort((x, y) => x.name.localeCompare(y.name));
+    $("challenge").hidden = people.length < 2;
+    for (const id of ["ch-a", "ch-b"]) {
+      const sel = $(id), cur = sel.value;
+      sel.innerHTML = `<option value="">${id === "ch-a" ? "Challenger" : "Opponent"}</option>` + people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+      if (S.people[cur]) sel.value = cur;
+    }
+  }
+  $("ch-go").addEventListener("click", () => {
+    const a = $("ch-a").value, b = $("ch-b").value, msg = $("ch-msg");
+    if (!a || !b) { msg.textContent = "Pick two people."; return; }
+    if (a === b) { msg.textContent = "Pick two different people."; return; }
+    if (S.matchups.some(m => pairKey(m.a, m.b) === pairKey(a, b))) { msg.textContent = "That matchup is already up."; return; }
+    msg.textContent = ""; $("ch-a").value = ""; $("ch-b").value = "";
+    addMatchup(a, b);
   });
   $("board").addEventListener("click", async e => {
     const b = e.target.closest(".pill"); if (!b) return;

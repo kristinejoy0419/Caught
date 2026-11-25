@@ -1,6 +1,6 @@
 # Caught in PJs
 
-A one-page site where friends vote on which partner in each couple catches the other. It also has a catches leaderboard, random suggested matchups, and an "Add person" button that crops a photo into a circle.
+A one-page site where friends vote on which partner in each couple catches the other. It also has a catches leaderboard, random girl vs guy suggested matchups, a "Challenge someone" picker for any other pair, and an "Add person" button that crops a photo into a circle.
 
 Anyone with the link can vote, add people and add matchups. They don't need to sign in. Each browser gets one vote per matchup. Only someone with the organizer code can record who caught who.
 
