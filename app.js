@@ -238,6 +238,13 @@
   function resetAdd() { $("add-panel").hidden = true; $("add-form").reset(); cropped = null; $("add-preview").src = blank; setMsg("Use a photo where their face is near the middle. It gets cropped to a circle."); }
   $("open-add").hidden = !sb;
   $("open-add").addEventListener("click", () => { $("add-panel").hidden = false; $("add-name").focus(); });
+  // Names Kristine expects to join, so Girl / Guy is picked for them as they type. It can still be changed.
+  const KNOWN = { weini: "girl", jordan: "guy", maverick: "guy", ari: "girl", cheryll: "girl", bryce: "guy", cm: "girl",
+    "chris marie": "girl", marz: "guy", marcel: "guy", keke: "girl", keeks: "girl", jaime: "girl", teri: "girl" };
+  $("add-name").addEventListener("input", e => {
+    const g = KNOWN[e.target.value.trim().toLowerCase().replace(/\s+/g, " ")];
+    if (g) document.querySelector(`input[name="add-girl"][value="${g}"]`).checked = true;
+  });
   $("add-cancel").addEventListener("click", resetAdd);
   $("add-photo").addEventListener("change", async e => {
     const f = e.target.files[0]; if (!f) return;
@@ -292,7 +299,7 @@
   if (!sb) {
     // Preview mode until config.js is filled in: show the starting board, voting off.
     const seed = [["daniel","Daniel"],["kristine","Kristine"],["theresa","Theresa"],["jg","JG"],["jas","Jas"],["mike","Mike"],["panha","Panha"],["kat","Kat"],["dan","Dan"],["liz","Liz"],["adam","Adam"]];
-    S.people = Object.fromEntries(seed.map(([id, name]) => [id, { id, name, photo_url: `photos/${id}.jpg` }]));
+    S.people = Object.fromEntries(seed.map(([id, name]) => [id, { id, name, photo_url: `photos/${id}.jpg`, girl: ["kristine","theresa","jas","kat","liz"].includes(id) }]));
     S.matchups = [["daniel","kristine"],["theresa","jg"],["jas","mike"],["panha","kat"],["dan","liz"]].map(([a, b], i) => ({ id: "m" + i, a, b }));
     S.loaded = true;
     renderAll();

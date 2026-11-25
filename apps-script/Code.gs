@@ -30,6 +30,8 @@ const TABS = {
 // The starting players and couples.
 const SEED_PLAYERS = [["daniel", "Daniel"], ["kristine", "Kristine"], ["theresa", "Theresa"], ["jg", "JG"],
   ["jas", "Jas"], ["mike", "Mike"], ["panha", "Panha"], ["kat", "Kat"], ["dan", "Dan"], ["liz", "Liz"], ["adam", "Adam"]];
+// The starting girls. A blank "Girl or guy" cell falls back to this list.
+const SEED_GIRLS = ["kristine", "theresa", "jas", "kat", "liz"];
 const SEED_MATCHUPS = [["m1", "daniel", "kristine"], ["m2", "theresa", "jg"], ["m3", "jas", "mike"],
   ["m4", "panha", "kat"], ["m5", "dan", "liz"]];
 
@@ -52,8 +54,8 @@ function tab_(name) {
   sheet.getRange(1, 1, 1, cols.length).setFontWeight("bold");
   const now = new Date();
   if (name === "Players") {
-    sheet.getRange(2, 1, SEED_PLAYERS.length, 5)
-      .setValues(SEED_PLAYERS.map(([id, n]) => [id, n, PHOTO_BASE + id + ".jpg", now, "Yes"]));
+    sheet.getRange(2, 1, SEED_PLAYERS.length, 6)
+      .setValues(SEED_PLAYERS.map(([id, n]) => [id, n, PHOTO_BASE + id + ".jpg", now, "Yes", SEED_GIRLS.indexOf(id) >= 0 ? "Girl" : "Guy"]));
   } else if (name === "Matchups") {
     sheet.getRange(2, 1, SEED_MATCHUPS.length, 5).setValues(SEED_MATCHUPS.map(([id, a, b]) => [id, a, b, now, ""]));
   }
@@ -111,11 +113,16 @@ function doPost(e) {
   return json_(res && res.ok === false ? res : state_(voter));
 }
 
+function girl_(r) {
+  const said = String(r[5] || "").trim();
+  return said ? /^(girl|f|female|woman)$/i.test(said) : SEED_GIRLS.indexOf(String(r[0])) >= 0;
+}
+
 function state_(voter) {
   code_();
   const players = rows_("Players").filter(r => r[0] && r[1]).map(r => ({
     id: String(r[0]), name: String(r[1]).slice(0, 30), photo: /^https:\/\//.test(r[2]) ? String(r[2]) : "",
-    open: String(r[4]).trim().toLowerCase() !== "no", girl: /^(girl|f|female|woman)$/i.test(String(r[5] || "").trim()),
+    open: String(r[4]).trim().toLowerCase() !== "no", girl: girl_(r),
   }));
   const byName = {};
   players.forEach(p => { byName[p.name.toLowerCase()] = p.id; byName[p.id.toLowerCase()] = p.id; });
