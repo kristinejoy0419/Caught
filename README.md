@@ -4,34 +4,30 @@ A one-page site where friends vote on which partner in each couple catches the o
 
 Anyone with the link can vote, add people and add matchups. They don't need to sign in. Each browser gets one vote per matchup. Only someone with the organizer code can record who caught who.
 
-## Setup (about 10 minutes)
+Live at https://kristinejoy0419.github.io/Caught/ (GitHub Pages, published from `main` by `.github/workflows/pages.yml`).
 
-### 1. Create the database (Supabase, free)
+## Setup (about 5 minutes)
 
-1. Sign up at supabase.com and create a new project. Any name and region works.
-2. Open **SQL Editor**, paste in all of `supabase/schema.sql`, and change `change-me-to-a-secret` on the last line to your own organizer code. Then click **Run**.
-3. Open **Project Settings → API** and copy the **Project URL** and the **anon public** key.
-4. Paste both into `config.js` and commit.
+Everything is stored in a Google Sheet through a small Apps Script.
 
-The anon key is designed to be public. The rules in `schema.sql` limit what it can do.
+1. Make a new Google Sheet (any name, e.g. "Caught in PJs"). Open **Extensions > Apps Script**, delete what's there, and paste in all of `apps-script/Code.gs`. Click **Save**.
+2. Click **Deploy > New deployment**, choose type **Web app**, set **Execute as: Me** and **Who has access: Anyone**, and click **Deploy**. Approve the permissions.
+3. Copy the **Web app URL** into `config.js` as `sheetUrl` and commit.
 
-### 2. Put it online (Netlify, free)
+The first time the page loads, the script adds **Players**, **Matchups**, **Votes** and **Settings** tabs and fills in the starting players and couples.
 
-1. Sign up at netlify.com and choose **Add new site → Import an existing project → GitHub**, then pick this repo.
-2. Leave the build command empty and set the publish directory to `/`. Then deploy.
-3. Share the `*.netlify.app` link with the group. You can rename it under **Site configuration → Change site name**.
-
-Netlify works with a private repo, so the photos aren't public on GitHub. Vercel works the same way.
+After any change to `Code.gs`: **Deploy > Manage deployments**, click the pencil, set **Version: New version**, and click **Deploy**. The URL stays the same.
 
 ## Running the event
 
-- Tap **Organizer** at the bottom of the page and enter your code. Each card then shows "___ caught" buttons. Tap one to record the result, which updates the leaderboard. Tap "Undo result" to fix a mistake.
+- The organizer code is on the Sheet's **Settings** tab. Tap **Organizer** at the bottom of the page and enter it. Each card then shows "___ caught" buttons. Tap one to record the result, which updates the leaderboard. Tap "Undo result" to fix a mistake. You can also type the winner's name in the **Caught by** column on the Matchups tab.
+- To take someone off the board or remove a matchup, delete its row in the Sheet.
 - Votes refresh every few seconds for everyone.
 
 ## Files
 
 - `index.html`: the page and its styles
 - `app.js`: voting, leaderboard, matchups, add person, organizer tools
-- `config.js`: your Supabase URL and anon key
-- `supabase/schema.sql`: tables, access rules, starting players and couples
+- `config.js`: the Apps Script web app URL
+- `apps-script/Code.gs`: the Google Sheet backend, with the starting players and couples
 - `photos/`: starting players' photos, cropped to faces
