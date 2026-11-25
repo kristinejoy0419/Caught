@@ -10,7 +10,8 @@
  * The first time the page loads, this creates four tabs and fills in the starting players
  * and matchups:
  *  - Players: one row per person. "Open" is Yes or No (open to new matchups). Delete a row to
- *    take someone off the board. Photos people upload go to a "Caught in PJs photos" Drive
+ *    take someone off the board. "Girl or guy": a girl's vote button says "escapes" instead of
+ *    "catches". Photos people upload go to a "Caught in PJs photos" Drive
  *    folder, shared view-only by link so the page can show them.
  *  - Matchups: one row per pair. "Caught by" holds the winner's name. The organizer fills it
  *    from the page, or you can type it here. Delete a row to remove a matchup.
@@ -22,7 +23,7 @@ const PHOTO_BASE = "https://kristinejoy0419.github.io/Caught/photos/";
 const MAX_PLAYERS = 150;
 const MAX_MATCHUPS = 300;
 const TABS = {
-  Players: ["Id", "Name", "Photo", "Added", "Open"],
+  Players: ["Id", "Name", "Photo", "Added", "Open", "Girl or guy"],
   Matchups: ["Id", "A", "B", "Added", "Caught by"],
   Votes: ["Voter", "Matchup", "Pick", "Updated"],
 };
@@ -114,7 +115,7 @@ function state_(voter) {
   code_();
   const players = rows_("Players").filter(r => r[0] && r[1]).map(r => ({
     id: String(r[0]), name: String(r[1]).slice(0, 30), photo: /^https:\/\//.test(r[2]) ? String(r[2]) : "",
-    open: String(r[4]).trim().toLowerCase() !== "no",
+    open: String(r[4]).trim().toLowerCase() !== "no", girl: /^(girl|f|female|woman)$/i.test(String(r[5] || "").trim()),
   }));
   const byName = {};
   players.forEach(p => { byName[p.name.toLowerCase()] = p.id; byName[p.id.toLowerCase()] = p.id; });
@@ -147,6 +148,7 @@ function vote_(body) {
 
 function join_(body) {
   const name = clip_(body.name, 30);
+  if (body.girl !== true && body.girl !== false) return { ok: false, error: "Pick girl or guy" };
   if (!name) return { ok: false, error: "Enter a name first" };
   if (rows_("Players").some(r => String(r[1]).toLowerCase() === name.toLowerCase())) return { ok: false, error: name + " is already playing" };
   let photo = "";
@@ -165,7 +167,7 @@ function join_(body) {
     if (rows.length >= MAX_PLAYERS) return { ok: false, error: "The board is full" };
     if (rows.some(r => String(r[1]).toLowerCase() === name.toLowerCase())) return { ok: false, error: name + " is already playing" };
     const id = (name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 12) || "p") + "-" + Utilities.getUuid().slice(0, 6);
-    tab_("Players").appendRow([id, name, photo, new Date(), "Yes"]);
+    tab_("Players").appendRow([id, name, photo, new Date(), "Yes", body.girl ? "Girl" : "Guy"]);
   });
 }
 

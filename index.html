@@ -72,6 +72,8 @@ section.panel h2 small { font: 500 12px var(--body); color: var(--muted); letter
 .fields input[type=text] { width: 100%; background: var(--card-2); border: 1px solid var(--card-line); color: var(--fg); border-radius: 10px; padding: 10px 12px; font: 500 15px var(--body); }
 label.file { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--card-line); background: var(--card-2); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
 label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.gender { display: flex; gap: 16px; font-size: 14px; font-weight: 600; }
+.gender label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .formbtns { display: flex; gap: 10px; justify-content: flex-end; }
 .msg { font-size: 13px; color: var(--muted); min-height: 1em; margin: 0; }
 .msg.err { color: var(--danger); }
@@ -180,6 +182,10 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
         <img class="preview" id="add-preview" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
         <div class="fields">
           <input type="text" id="add-name" placeholder="Name" maxlength="30" autocomplete="off" aria-label="Name">
+          <div class="gender" role="radiogroup" aria-label="Girl or guy">
+            <label><input type="radio" name="add-girl" value="girl"> Girl</label>
+            <label><input type="radio" name="add-girl" value="guy"> Guy</label>
+          </div>
           <label class="file" for="add-photo">Choose photo<input type="file" id="add-photo" accept="image/*"></label>
         </div>
       </div>
@@ -223,6 +229,6 @@ label.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 </div>
 
 <script src="config.js?v=12"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
