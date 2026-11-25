@@ -1,4 +1,4 @@
-// Caught in PJs: votes, matchups and catches stored in Supabase.
+// Caught in PJs: votes, matchups and catches stored in a Google Sheet (see apps-script/Code.gs).
 (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -9,12 +9,42 @@
   };
 
   const cfg = window.CAUGHT_CONFIG || {};
-  const configured = cfg.supabaseUrl && !cfg.supabaseUrl.includes("YOUR-PROJECT") && cfg.supabaseAnonKey && !cfg.supabaseAnonKey.includes("YOUR-ANON");
-  const sb = configured && window.supabase ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
+  const API = /^https:\/\/script\.google\.com\//.test(cfg.sheetUrl || "") ? cfg.sheetUrl.trim() : "";
+  const sb = API ? true : null; // true once the Sheet is connected
 
   // Each browser gets a random voter id, so one device = one vote per matchup.
   let voter = store.get("caught.voter");
-  if (!voter) { voter = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set("caught.voter", voter); }
+  if (!voter || !/^[\w-]{8,60}$/.test(voter)) { voter = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set("caught.voter", voter); }
+
+  // ---------- Sheet API ----------
+  async function post(body) {
+    try {
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" }, // a "simple" request Apps Script accepts cross-origin
+        body: JSON.stringify({ ...body, voter }),
+      });
+      const data = await res.json();
+      if (!data.ok) return { error: new Error(data.error || "Not saved") };
+      if (Array.isArray(data.players)) apply(data);
+      return { data };
+    } catch (err) { return { error: err }; }
+  }
+  // Turn the Sheet's answer into the shapes the page renders.
+  function apply(d) {
+    S.people = Object.fromEntries(d.players.map(p => [p.id, { id: p.id, name: p.name, photo_url: p.photo, open: p.open !== false }]));
+    S.matchups = d.matchups.map(m => ({ id: m.id, a: m.a, b: m.b }));
+    const mine = d.mine || {};
+    S.votes = [];
+    for (const m of d.matchups) for (const side of ["a", "b"]) {
+      const n = (+m.votes?.[side] || 0) - (mine[m.id] === side ? 1 : 0);
+      for (let i = 0; i < n; i++) S.votes.push({ matchup_id: m.id, voter: "", pick: side });
+    }
+    for (const [mid, pick] of Object.entries(mine)) S.votes.push({ matchup_id: mid, voter, pick });
+    S.results = Object.fromEntries(d.matchups.filter(m => m.catcher).map(m => [m.id, { matchup_id: m.id, catcher: m.catcher }]));
+    S.loaded = true;
+    renderAll();
+  }
 
   const S = { people: {}, matchups: [], votes: [], results: {}, loaded: false, showAll: false, suggestion: null, adminCode: store.get("caught.admin") };
 
@@ -26,7 +56,7 @@
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/><text x="50" y="62" text-anchor="middle" font-family="Arial" font-weight="700" font-size="36" fill="#fff">${esc((name[0] || "?").toUpperCase())}</text></svg>`;
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
   }
-  const safeUrl = u => typeof u === "string" && (/^photos\/[\w.-]+$/.test(u) || u.startsWith(cfg.supabaseUrl + "/storage/")) ? u : null;
+  const safeUrl = u => typeof u === "string" && (/^photos\/[\w.-]+$/.test(u) || /^https:\/\//.test(u)) ? u : null;
   const photo = p => (p && safeUrl(p.photo_url)) || initials(p ? p.name : "?");
   const nameOf = id => S.people[id]?.name || "Someone";
   const img = (p, cls = "av") => `<img class="${cls}" src="${esc(photo(p))}" alt="${esc(p?.name || "")}" data-fallback="${esc(initials(p?.name || "?"))}">`;
@@ -42,22 +72,15 @@
   }
 
   // ---------- data ----------
+  let inflight = 0; // skip background refreshes while a change is saving
   async function load() {
-    if (!sb) return;
-    const [p, m, v, r] = await Promise.all([
-      sb.from("participants").select("id,name,photo_url,open,created_at").order("created_at"),
-      sb.from("matchups").select("id,a,b,created_at").order("created_at"),
-      sb.from("votes").select("matchup_id,voter,pick"),
-      sb.from("results").select("matchup_id,catcher"),
-    ]);
-    const err = p.error || m.error || v.error || r.error;
-    if (err) { if (!S.loaded) showError("The board couldn't load. Refresh to try again."); return; }
-    S.people = Object.fromEntries(p.data.map(x => [x.id, x]));
-    S.matchups = m.data;
-    S.votes = v.data;
-    S.results = Object.fromEntries(r.data.map(x => [x.matchup_id, x]));
-    S.loaded = true;
-    renderAll();
+    if (!sb || inflight) return;
+    try {
+      const res = await fetch(API + (API.includes("?") ? "&" : "?") + "voter=" + encodeURIComponent(voter), { cache: "no-store" });
+      const d = await res.json();
+      if (!d.ok || !Array.isArray(d.players)) throw new Error("not ready");
+      if (!inflight) apply(d);
+    } catch (err) { if (!S.loaded) showError("The board couldn't load. Refresh to try again."); }
   }
 
   const tally = mid => {
@@ -162,20 +185,16 @@
       S.votes = S.votes.filter(x => !(x.matchup_id === mid && x.voter === voter));
       if (cur !== side) S.votes.push({ matchup_id: mid, voter, pick: side });
       renderFeed();
-      const q = cur === side
-        ? sb.from("votes").delete().match({ matchup_id: mid, voter })
-        : sb.from("votes").upsert({ matchup_id: mid, voter, pick: side, updated_at: new Date().toISOString() });
-      const { error } = await q;
+      inflight++;
+      const { error } = await post({ action: "vote", matchup: mid, pick: cur === side ? "" : side });
+      inflight--;
       if (error) { note("Your vote didn't save. Try again.", true); load(); }
       return;
     }
     const a = e.target.closest(".mini");
     if (a && sb && S.adminCode) {
-      const { error } = a.dataset.act === "catch"
-        ? await sb.rpc("record_result", { p_matchup: a.dataset.m, p_catcher: a.dataset.p, p_code: S.adminCode })
-        : await sb.rpc("clear_result", { p_matchup: a.dataset.m, p_code: S.adminCode });
-      if (error) note("That result didn't save. Check the organizer code.", true);
-      load();
+      const { error } = await post({ action: "result", matchup: a.dataset.m, catcher: a.dataset.act === "catch" ? a.dataset.p : "", code: S.adminCode });
+      if (error) { note("That result didn't save. Check the organizer code.", true); load(); }
     }
   });
 
@@ -191,9 +210,9 @@
       return;
     }
     const [a, b] = S.suggestion;
-    const { error } = await sb.from("matchups").insert({ a, b });
-    if (error) note("The matchup didn't save. Try again.", true);
-    S.suggestion = null; load();
+    S.suggestion = null;
+    const { error } = await post({ action: "matchup", a, b });
+    if (error) { note(error.message && error.message !== "Not saved" ? error.message + "." : "The matchup didn't save. Try again.", true); load(); }
   });
   $("board").addEventListener("click", async e => {
     const b = e.target.closest(".pill"); if (!b) return;
@@ -203,9 +222,10 @@
     if (S.suggestion && !next && S.suggestion.includes(p.id)) S.suggestion = null;
     renderBoard(); shuffle();
     if (!sb) { document.querySelectorAll(".vote").forEach(x => x.disabled = true); return; }
-    const { error } = await sb.rpc("set_open", { p_id: p.id, p_open: next });
-    if (error) { note("That change didn't save. Try again.", true); }
-    load();
+    inflight++;
+    const { error } = await post({ action: "open", id: p.id, open: next });
+    inflight--;
+    if (error) { note("That change didn't save. Try again.", true); load(); }
   });
   $("board-more").addEventListener("click", () => { S.showAll = !S.showAll; renderBoard(); });
 
@@ -236,16 +256,17 @@
     if (Object.values(S.people).some(p => p.name.toLowerCase() === name.toLowerCase())) { setMsg(`${name} is already playing.`, true); return; }
     $("add-save").disabled = true; setMsg("Saving…");
     try {
-      let photo_url = null;
+      let photo = null;
       if (cropped) {
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-        const up = await sb.storage.from("photos").upload(path, cropped, { contentType: "image/jpeg" });
-        if (up.error) throw up.error;
-        photo_url = sb.storage.from("photos").getPublicUrl(path).data.publicUrl;
+        const dataUrl = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = fail; r.readAsDataURL(cropped); });
+        photo = { data: String(dataUrl).split(",")[1], type: "image/jpeg" };
+        setMsg("Uploading the photo…");
       }
-      const { error } = await sb.from("participants").insert({ name, photo_url });
+      inflight++;
+      const { error } = await post({ action: "join", name, photo });
+      inflight--;
       if (error) throw error;
-      resetAdd(); note(`Added ${name}.`); load();
+      resetAdd(); note(`Added ${name}.`);
     } catch (err) { setMsg("Couldn't add them: " + (err?.message || "try again."), true); }
     finally { $("add-save").disabled = false; }
   });
@@ -256,8 +277,8 @@
     e.preventDefault();
     if (S.adminCode) { S.adminCode = null; store.del("caught.admin"); showAdminState(); renderFeed(); return; }
     const code = $("admin-code").value.trim(); if (!code || !sb) return;
-    const { data, error } = await sb.rpc("check_admin", { p_code: code });
-    if (error || !data) { $("admin-msg").textContent = "That code didn't match."; return; }
+    const { data, error } = await post({ action: "check", code });
+    if (error || !data?.valid) { $("admin-msg").textContent = "That code didn't match."; return; }
     S.adminCode = code; store.set("caught.admin", code); $("admin-code").value = ""; showAdminState(); renderFeed();
   });
   if (S.adminCode) $("organizer").open = true;
