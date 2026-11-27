@@ -22,6 +22,7 @@ After any change to `Code.gs`: **Deploy > Manage deployments**, click the pencil
 
 - The organizer code is on the Sheet's **Settings** tab. Tap **Organizer** at the bottom of the page and enter it. Each card then shows "___ caught" buttons. Tap one to record the result, which updates the leaderboard. Tap "Undo result" to fix a mistake. You can also type the winner's name in the **Caught by** column on the Matchups tab.
 - The **Girl or guy** column on the Players tab sets each person's vote button: girls get "escapes", guys get "catches". The "Add person" form asks for it; the starting five girls (Kristine, Theresa, Jas, Kat, Liz) are already set even if their cell is blank.
+- "Add person" has a **One person / A couple** switch. Pick "A couple" to add two people at once. Each gets their own row on the Players tab, and their matchup goes on the Matchups tab. No Apps Script redeploy is needed for this.
 - To take someone off the board or remove a matchup, delete its row in the Sheet.
 - Votes refresh every few seconds for everyone.
 

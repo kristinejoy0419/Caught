@@ -250,55 +250,101 @@
   });
   $("board-more").addEventListener("click", () => { S.showAll = !S.showAll; renderBoard(); });
 
-  // Add person
-  let cropped = null;
-  const blank = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+  // Add person, or a couple (two people plus their matchup)
+  const cropped = { 1: null, 2: null };
+  const blank = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  const tip = "Use a photo where their face is near the middle. It gets cropped to a circle.";
   const setMsg = (t, err) => { const m = $("add-msg"); m.textContent = t; m.classList.toggle("err", !!err); };
-  function resetAdd() { $("add-panel").hidden = true; $("add-form").reset(); cropped = null; $("add-preview").src = blank; setMsg("Use a photo where their face is near the middle. It gets cropped to a circle."); }
+  const couple = () => document.querySelector('input[name="add-mode"]:checked')?.value === "couple";
+  function showMode() {
+    const two = couple();
+    $("add-row2").hidden = !two;
+    $("add-title").textContent = two ? "Add a couple" : "Add a person";
+    $("add-save").textContent = two ? "Add couple" : "Add person";
+    $("add-name").placeholder = two ? "First person's name" : "Name";
+    setMsg(two ? "They'll get their own matchup. " + tip : tip);
+  }
+  function resetAdd() {
+    $("add-panel").hidden = true; $("add-form").reset();
+    document.querySelector('input[name="add-mode"][value="one"]').checked = true;
+    cropped[1] = cropped[2] = null; $("add-preview").src = $("add-preview2").src = blank;
+    showMode();
+  }
+  document.querySelectorAll('input[name="add-mode"]').forEach(r => r.addEventListener("change", () => { showMode(); if (couple()) $("add-name2").focus(); }));
   $("open-add").hidden = !sb;
   $("open-add").addEventListener("click", () => { $("add-panel").hidden = false; $("add-name").focus(); });
   // Names Kristine expects to join, so Girl / Guy is picked for them as they type. It can still be changed.
   const KNOWN = { weini: "girl", jordan: "guy", maverick: "guy", ari: "girl", cheryll: "girl", bryce: "guy", cm: "girl",
     "chris marie": "girl", marz: "guy", marcel: "guy", keke: "girl", keeks: "girl", jaime: "girl", teri: "girl" };
-  $("add-name").addEventListener("input", e => {
-    const g = KNOWN[e.target.value.trim().toLowerCase().replace(/\s+/g, " ")];
-    if (g) document.querySelector(`input[name="add-girl"][value="${g}"]`).checked = true;
-  });
+  for (const [input, group] of [["add-name", "add-girl"], ["add-name2", "add-girl2"]]) {
+    $(input).addEventListener("input", e => {
+      const g = KNOWN[e.target.value.trim().toLowerCase().replace(/\s+/g, " ")];
+      if (g) document.querySelector(`input[name="${group}"][value="${g}"]`).checked = true;
+    });
+  }
   $("add-cancel").addEventListener("click", resetAdd);
-  $("add-photo").addEventListener("change", async e => {
-    const f = e.target.files[0]; if (!f) return;
-    try {
-      const bmp = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => createImageBitmap(f));
-      const side = Math.min(bmp.width, bmp.height), size = 400;
-      const c = document.createElement("canvas"); c.width = c.height = size;
-      c.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
-      cropped = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
-      $("add-preview").src = URL.createObjectURL(cropped);
-      setMsg("Photo ready.");
-    } catch { cropped = null; setMsg("That photo couldn't be read. Try a JPG or PNG.", true); }
-  });
+  for (const [n, input, preview] of [[1, "add-photo", "add-preview"], [2, "add-photo2", "add-preview2"]]) {
+    $(input).addEventListener("change", async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try {
+        const bmp = await createImageBitmap(f, { imageOrientation: "from-image" }).catch(() => createImageBitmap(f));
+        const side = Math.min(bmp.width, bmp.height), size = 400;
+        const c = document.createElement("canvas"); c.width = c.height = size;
+        c.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+        cropped[n] = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+        $(preview).src = URL.createObjectURL(cropped[n]);
+        setMsg("Photo ready.");
+      } catch { cropped[n] = null; setMsg("That photo couldn't be read. Try a JPG or PNG.", true); }
+    });
+  }
+  // Reads one row of the form, or returns an error message.
+  function readRow(n) {
+    const name = $(n === 1 ? "add-name" : "add-name2").value.trim();
+    const g = document.querySelector(`input[name="${n === 1 ? "add-girl" : "add-girl2"}"]:checked`);
+    const who = couple() ? (n === 1 ? "the first person" : "their partner") : "";
+    if (!name) return { error: couple() ? `Enter a name for ${who}.` : "Enter a name first.", focus: n === 1 ? "add-name" : "add-name2" };
+    if (!g) return { error: couple() ? `Pick girl or guy for ${name}.` : "Pick girl or guy." };
+    if (Object.values(S.people).some(p => p.name.toLowerCase() === name.toLowerCase())) return { error: `${name} is already playing.` };
+    return { name, girl: g.value === "girl", blob: cropped[n] };
+  }
+  async function join(row) {
+    let photo = null;
+    if (row.blob) {
+      const dataUrl = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = fail; r.readAsDataURL(row.blob); });
+      photo = { data: String(dataUrl).split(",")[1], type: "image/jpeg" };
+      setMsg(`Uploading ${row.name}'s photo…`);
+    }
+    inflight++;
+    try { const { error } = await post({ action: "join", name: row.name, photo, girl: row.girl }); if (error) throw error; }
+    finally { inflight--; }
+    return Object.values(S.people).find(p => p.name.toLowerCase() === row.name.toLowerCase())?.id;
+  }
   $("add-form").addEventListener("submit", async e => {
     e.preventDefault();
-    const name = $("add-name").value.trim();
-    if (!name) { setMsg("Enter a name first.", true); $("add-name").focus(); return; }
-    const g = document.querySelector('input[name="add-girl"]:checked');
-    if (!g) { setMsg("Pick girl or guy.", true); return; }
-    if (Object.values(S.people).some(p => p.name.toLowerCase() === name.toLowerCase())) { setMsg(`${name} is already playing.`, true); return; }
+    const rows = couple() ? [readRow(1), readRow(2)] : [readRow(1)];
+    const bad = rows.find(r => r.error);
+    if (bad) { setMsg(bad.error, true); if (bad.focus) $(bad.focus).focus(); return; }
+    if (rows.length === 2 && rows[0].name.toLowerCase() === rows[1].name.toLowerCase()) { setMsg("Enter two different names.", true); return; }
     $("add-save").disabled = true; setMsg("Saving…");
+    const added = [];
     try {
-      let photo = null;
-      if (cropped) {
-        const dataUrl = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = fail; r.readAsDataURL(cropped); });
-        photo = { data: String(dataUrl).split(",")[1], type: "image/jpeg" };
-        setMsg("Uploading the photo…");
+      for (const row of rows) { const id = await join(row); added.push({ ...row, id }); }
+      if (added.length === 2) {
+        const [a, b] = added;
+        if (!a.id || !b.id) throw new Error(`added both, but their matchup didn't save. Add it with Proposed challenge`);
+        inflight++;
+        const { error } = await post({ action: "matchup", a: a.id, b: b.id });
+        inflight--;
+        if (error) throw new Error(`added both, but their matchup didn't save (${error.message}). Add it with Proposed challenge`);
       }
-      inflight++;
-      const { error } = await post({ action: "join", name, photo, girl: g.value === "girl" });
-      inflight--;
-      if (error) throw error;
-      resetAdd(); note(`Added ${name}.`);
-    } catch (err) { setMsg("Couldn't add them: " + (err?.message || "try again."), true); }
-    finally { $("add-save").disabled = false; }
+      resetAdd(); note(added.length === 2 ? `Added ${added[0].name} and ${added[1].name} with their matchup.` : `Added ${added[0].name}.`);
+    } catch (err) {
+      const why = err?.message || "try again.";
+      if (added.length === 1 && rows.length === 2) {
+        // The first person saved, so point them at adding the partner on their own.
+        setMsg(`Added ${added[0].name}, but couldn't add ${rows[1].name}: ${why} Add ${rows[1].name} as one person, then pair them with Proposed challenge.`, true);
+      } else setMsg(added.length === 2 ? `Couldn't finish: ${why}.` : "Couldn't add them: " + why, true);
+    } finally { $("add-save").disabled = false; }
   });
 
   // Organizer unlock
